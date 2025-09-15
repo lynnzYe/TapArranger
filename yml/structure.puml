@@ -13,18 +13,18 @@ package MusicScore <<Rectangle>>{
 
     class MelodySegment{
         + int[] midi_pitches
-        + Chord chord
+        + Harmony chord
     }
 
-    class Chord {
+    class Harmony {
         + int root
-        + ChordType type
+        + HarmonyType type
         + string harte_notation
 
-        + int[] return_chord_pitches()
+        + int[] return_Harmony_pitches()
     }
 
-    enum ChordType
+    enum HarmonyType
 }
 
 class Synthesizer {
@@ -58,7 +58,7 @@ package AccArranger {
 }
 
 Score *--MelodySegment
-MelodySegment *-- Chord
+MelodySegment *-- Harmony
 Arranger *-- ArrRule
 Arranger *-- ArrContext
 
