@@ -44,7 +44,20 @@ class Fluidx:
         self.fs.all_notes_off(chan)
 
 
-def main():
+def syn_midi_notes(notes):
+    soundfont_path = '../../data/piano.sf2'
+    fs = Fluidx(soundfont_path)
+
+    import itertools
+    flat_notes = list(itertools.chain(*notes))
+    for nt in flat_notes:
+        fs.noteon(0, nt, 60)
+        time.sleep(0.3)
+        fs.noteoff(0, nt)
+        # time.sleep(0.5)
+
+
+def example():
     """
     Toy example using Fluidx (pyFluidSynth)
     :return:
@@ -64,6 +77,16 @@ def main():
     while True:
         input("Release all current noteon?")
         fs.release_all(0)
+
+
+def main():
+    # example()
+    syn_midi_notes(
+        [[60, 60, 67, 67], [69, 69], [67], [65, 65], [64, 64], [62, 62], [60], [67, 67], [65, 65], [64, 64], [62],
+         [67, 67], [65, 65], [64, 64], [62], [60, 60, 67, 67], [69, 69], [67], [65, 65], [64, 64], [62, 62], [60]]
+
+    )
+    pass
 
 
 if __name__ == '__main__':
