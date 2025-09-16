@@ -7,8 +7,8 @@ from enum import Enum
 
 from harte.harte import Harte
 
+from taparr.util.logger import logger
 from taparr.util.midi_util import midi_to_pitch_name
-from util.logger import logger
 
 
 class HarmonyType(Enum):
@@ -20,27 +20,31 @@ class HarmonyType(Enum):
 
 class Harmony:
     # Wrapper around Harte
-    harmony: Harte or None
+    harte: Harte or None
 
     def __init__(self, hart_str=None, root=None, htype=None):
         if hart_str is not None:
             # initialize chord from Harte notation
-            self.harmony = Harte(hart_str)
+            self.harte = Harte(hart_str)
         else:
             assert root is not None and htype is not None
-            self.harmony = Harte(midi_to_pitch_name(root % 12) + f':{htype}')
+            self.harte = Harte(midi_to_pitch_name(root % 12) + f':{htype}')
+
+    def __str__(self):
+        return self.harte.prettify()
 
 
 class MelodySegment:
-    def __init__(self, midi_pitches: [int], harmonies: [Harmony], harte=None):
-        assert len(midi_pitches) == len(harmonies)
+    def __init__(self, midi_pitches: [int], harmony: Harmony):
         self.midi_pitches = midi_pitches
-        self.htype = harmonies
-        self.harte = harte
+        self.harmony = harmony
         pass
 
     def __len__(self):
         return len(self.midi_pitches)
+
+    def __repr__(self):
+        return f"Harmony:{self.harmony}, Melody={self.midi_pitches}"
 
 
 class Score:
@@ -53,6 +57,11 @@ class Score:
     def build_melody_segments(self):
         # Reserved for transforming a midi file to MelodySegments and corresponding Harmonies
         pass
+
+    def consume_curr_melody(self):
+        curr_melody_pitch = self.melody_segs[self._pointer[0]][self._pointer[1]]
+        self.advance()
+        return curr_melody_pitch
 
     def advance(self):
         assert self.melody_segs is not None and type(self.melody_segs) == list
@@ -78,7 +87,7 @@ def create_score(melodies, chords):
     return Score(all_mseg)
 
 
-class ExampleMelody:
+class ExampleScore:
     star_m545 = create_score(
         [[60, 60, 67, 67], [69, 69], [67], [65, 65], [64, 64], [62, 62], [60],
          [67, 67], [65, 65], [64, 64], [62], [67, 67], [65, 65], [64, 64], [62],
@@ -91,7 +100,7 @@ class ExampleMelody:
     )
 
     some_where_over_the_rainbow = create_score(
-        [[63], [75], [74, 70, 72], [74, 75], [63], [72], [70], [64],
+        [[63], [75], [74, 70, 72], [74], [75], [63], [72], [70], [64],
          [60], [68], [67, 63, 65], [67, 68], [65, 62, 63], [65], [67], [63],
          [60, 58], [62, 65]],
         [
@@ -120,7 +129,9 @@ def check_chord():
 
 
 def main():
-    check_chord()
+    # check_chord()
+    star = ExampleScore.some_where_over_the_rainbow
+    print(star)
 
 
 if __name__ == "__main__":

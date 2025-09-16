@@ -1,8 +1,27 @@
+import os
 import time
 
 import fluidsynth
 
 from taparr.util.logger import logger
+
+
+def check_fluidsynth_library():
+    if os.name == 'posix':
+        possible_paths = [
+            "/usr/local/lib/libfluidsynth.dylib",
+            "/opt/homebrew/lib/libfluidsynth.dylib"
+        ]
+        found = False
+        for path in possible_paths:
+            if os.path.exists(path):
+                found = True
+                break
+
+        if not found:
+            raise Exception("FluidSynth library not found. If you're using macOS with Homebrew, "
+                            "try running:\n\n    export DYLD_LIBRARY_PATH=/opt/homebrew/lib\n")
+    return True
 
 
 class Fluidx:

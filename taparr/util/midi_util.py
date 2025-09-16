@@ -3,6 +3,7 @@ Author: Lynn Ye
 Created on: 2025/9/15
 Brief: 
 """
+import mido
 
 
 def generate_seq_from_pitch_class(pitch_list, octave=4):
@@ -84,12 +85,57 @@ def generate_test_scores():
     ]])
 
 
+def is_note_on(m: mido.Message):
+    return m.type == 'note_on' and m.velocity > 0
+
+
+def is_note_off(m: mido.Message):
+    return m.type == 'note_off' or (m.type == 'note_on' and m.velocity == 0)
+
+
+def check_mido():
+    mid = mido.MidiFile('/Users/kurono/Desktop/AG/magic-ldm_half_chnl_gen.mid')
+    print(mid)
+
+
+def array_choice(arr_begin, arr_end, hint=''):
+    while True:
+        try:
+            in_choice = int(input(hint))
+            if arr_begin <= in_choice < arr_end:
+                return in_choice
+            else:
+                print(f"Invalid input. Please input a valid number between {arr_begin} and {arr_end - 1}")
+        except Exception:
+            print(f"Invalid input. Please input a valid number between {arr_begin} and {arr_end - 1}")
+
+
+def choose_midi_input():
+    # logger.info("Available MIDI input devices:")
+    input_list = mido.get_input_names()
+    output_list = mido.get_output_names()
+    if len(input_list) == 0 or len(output_list) == 0:
+        raise RuntimeError("No MIDI input/output device found.")
+    print("=============================")
+    print("Please choose an input device")
+    for i, e in enumerate(input_list):
+        print(i, ': ', e)
+    input_choice = array_choice(0, len(input_list), '')
+    print("=============================")
+    print("Please choose an output device (If you see FluidSynth virtual port, plz choose this one.)")
+    for i, e in enumerate(output_list):
+        print(i, ': ', e)
+    output_choice = array_choice(0, len(output_list), '')
+    return [input_list[input_choice], output_list[output_choice]]
+
+
 def main():
     """
     Problems with MIDI
     - cannot handle chord change within one melody note
     """
-    generate_test_scores()
+    # generate_test_scores()
+    check_mido()
 
 
 if __name__ == "__main__":
