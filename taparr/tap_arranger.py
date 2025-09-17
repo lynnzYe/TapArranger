@@ -4,7 +4,6 @@ Created on: 2025/9/15
 Brief: 
 """
 
-import sched
 import time
 from threading import Thread, Event
 
@@ -14,10 +13,10 @@ from taparr.arranger import Arranger
 from taparr.score import Score
 from taparr.taparr_context import TapArrContext
 from taparr.util.logger import logger
-from taparr.util.midi_util import is_note_on
+from taparr.util.midi_util import is_note_on, is_note_off
 
 
-class BiDict:
+class MidiBinder:
     class _RevView:
         def __init__(self, rev):
             self._rev = rev
@@ -43,7 +42,7 @@ class BiDict:
         if data:
             for k, v in data.items():
                 self[k] = v  # use __setitem__
-        self.rev = BiDict._RevView(self._rev)
+        self.pitch_to_midi = MidiBinder._RevView(self._rev)
 
     def __setitem__(self, key, value):
         if key in self._fwd:
@@ -55,9 +54,6 @@ class BiDict:
 
     def __getitem__(self, key):
         return self._fwd[key]
-
-    def inverse(self, value):
-        return self._rev[value]
 
     def __delitem__(self, key):
         val = self._fwd.pop(key)
@@ -73,48 +69,41 @@ class BiDict:
 class TapArranger:
     melody_range = [60, 128]
     acc_range = [0, 59]
-    tap_map = BiDict()  # map input MIDI to pred MIDI, tracks current active MIDI note on
+    tap_map = MidiBinder()  # map input MIDI to pred MIDI, tracks current active MIDI note on
     context: TapArrContext = None
+    score: Score = None
+    arranger: Arranger = None
+    loop: bool = False  # if all the melodies are played, should we start once more from the beginning
 
     def __init__(self, input_port_name, output_port_name, score_chnl=0, arr_chnl=0,
-                 melody_range=None, acc_range=None):
+                 melody_range=None, loop=False):
         self.input_port = mido.open_input(input_port_name)
         self.output_port = mido.open_output(output_port_name)
 
         self.melody_range = melody_range if melody_range is not None else self.melody_range
-        self.acc_range = acc_range if acc_range is not None else self.acc_range
 
-        self.score = None
-        self.arr = None
         self.score_chnl = score_chnl
         self.arr_chnl = arr_chnl
+        self.loop = loop
 
         self.start_time = time.time()
 
         # Threads
         self.is_active = Event()
-        self.capture_thread = Thread(self.listen())
-        self.midi_scheduler = sched.scheduler(time.time, time.sleep)
-        self.midi_thread = Thread(target=self.run_midi_scheduler)
+        self.capture_thread = Thread(target=self.listen)
 
         self._stopped = True
 
     def load_score(self, score: Score, arr: Arranger):
         self.score = score
-        self.arr = arr
+        self.arranger = arr
 
     def start_realtime_capture(self):
         self._stopped = False
         self.is_active.set()
         self.capture_thread.start()
-        self.midi_thread.start()
         self.start_time = time.time()
         logger.info("TapArranger system started")
-
-    def run_midi_scheduler(self):
-        if self.midi_scheduler.queue:
-            self.midi_scheduler.run(blocking=False)
-        time.sleep(0.001)
 
     def is_melody(self, m: mido.Message):
         if self.melody_range[0] <= m.note <= self.melody_range[1]:
@@ -136,8 +125,10 @@ class TapArranger:
                             self.tap_melody(msg)
                         else:
                             self.tap_arr(msg)
-                    else:
+                    elif is_note_off(msg):
                         self.release(msg)
+                    else:
+                        self.output_port.send(msg)
                     # Update history
                     self.context  # do something with arr context
 
@@ -163,14 +154,6 @@ class TapArranger:
                 logger.debug("Realtime capture stopped.")
             self.capture_thread = None
 
-        if self.midi_thread and self.midi_thread.is_alive():
-            self.midi_thread.join(timeout=1.0)
-            if self.midi_thread.is_alive():
-                logger.warn("MIDI scheduler thread didn't stop gracefully within timeout")
-            else:
-                logger.debug("MIDI scheduler stopped.")
-            self.midi_scheduler = None
-
         if self.output_port is not None:
             self.output_port.close()
             logger.debug("MIDI output port closed.")
@@ -179,36 +162,51 @@ class TapArranger:
         self._stopped = True
 
     def send_noteon(self, tgt_pitch, corresp_msg: mido.Message, chnl, time_delay=0):
-        if tgt_pitch in self.tap_map.rev:
+        if tgt_pitch in self.tap_map.pitch_to_midi:
             # Case when there's already a note-on with tgt_pitch -> immediately end the current noteon
-            end_note = mido.Message(type='note-off', note=tgt_pitch, channel=chnl, time=time_delay)
-            self.midi_scheduler.enter(0, 1, self.output_port.send, (end_note,))
+            end_note = mido.Message(type='note_off', note=tgt_pitch, channel=chnl, time=time_delay)
+            self.output_port.send(end_note)
             # Update tap_map
             self.tap_map[corresp_msg.note] = tgt_pitch
+            # Send a new note on
+            self.output_port.send(
+                mido.Message(type=corresp_msg.type, note=tgt_pitch, channel=chnl, velocity=corresp_msg.velocity,
+                             time=time_delay))
         else:
             tgt_event = mido.Message(type=corresp_msg.type, note=tgt_pitch, channel=chnl,
                                      velocity=corresp_msg.velocity, time=time_delay)
-            self.midi_scheduler.enter(0, 1, self.output_port.send, (tgt_event,))
+            self.output_port.send(tgt_event)
             self.tap_map[corresp_msg.note] = tgt_pitch
 
     def tap_melody(self, msg: mido.Message):
         # Query score for current melody pointer
         if self.score is None:
             return
+        elif self.score.is_last_note() and self.loop:
+            self.score.reset_pointer()
+        elif self.score.eos():
+            logger.debug("End of Score. No more notes to play")
+            return
         tgt_pitch = self.score.consume_curr_melody()
-        self.send_noteon(tgt_pitch, msg, chnl=self.score_chnl)
+        if tgt_pitch is not None:
+            self.send_noteon(tgt_pitch, msg, chnl=self.score_chnl)
 
     def tap_arr(self, msg: mido.Message):
         # Query arranger and obtain the corresponding MIDI pitch
-        pass
+        if self.score is None or self.score.eos() or self.score.is_init_state():
+            return  # Start arranging only after the melody note is hit
+        tgt_midi = self.arranger.predict_midi(msg, self.score, self.context)
+        self.send_noteon(tgt_midi, msg, chnl=self.arr_chnl)  # TODO @Bmois may require special logic
+        # (instead of renewing same pitch onset, keep it.
 
     def release(self, msg: mido.Message, time_delay=0):
-        if msg.note not in self.tap_map.keys():
-            logger.warn("cannot find tap map key with", msg.note)
-        tgt_event = mido.Message(type='note-off', note=self.tap_map[msg.note], channel=self.score_chnl,
+        if msg.note not in self.tap_map:
+            # logger.warn("cannot find tap map key with", msg.note)
+            return
+        tgt_event = mido.Message(type=msg.type, note=self.tap_map[msg.note], channel=self.score_chnl,
                                  velocity=0, time=time_delay)
         del self.tap_map[msg.note]
-        self.midi_scheduler.enter(0, 1, self.output_port.send, (tgt_event,))
+        self.output_port.send(tgt_event)
 
 
 def main():

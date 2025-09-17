@@ -2,8 +2,10 @@ import os
 import time
 
 import fluidsynth
+import mido
 
 from taparr.util.logger import logger
+from taparr.util.midi_util import choose_midi_input
 
 
 def check_fluidsynth_library():
@@ -108,5 +110,19 @@ def main():
     pass
 
 
+def synth_by_keyboard():
+    soundfont_path = '../../data/piano.sf2'
+    fs = Fluidx(soundfont_path)
+
+    ports = choose_midi_input()
+    input_port = mido.open_input(ports[0])
+    output_port = mido.open_output(ports[1])
+
+    while True:
+        for msg in input_port.iter_pending():
+            output_port.send(msg)
+
+
 if __name__ == '__main__':
-    main()
+    # main()
+    synth_by_keyboard()
