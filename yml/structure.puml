@@ -1,0 +1,67 @@
+@startuml
+'https://plantuml.com/class-diagram
+
+package MusicScore <<Rectangle>>{
+    class Score{
+        - MelodySegment[] segments_
+        - Midifile midi_
+        - int sgmt_pointer_
+
+        + bool forward_pointer()
+        + bool load_midi(str midi_path)
+    }
+
+    class MelodySegment{
+        + int[] midi_pitches
+        + Harmony chord
+    }
+
+    class Harmony {
+        + int root
+        + HarmonyType type
+        + string harte_notation
+
+        + int[] return_Harmony_pitches()
+    }
+
+    enum HarmonyType
+}
+
+class Synthesizer {
+    - Fluidsynth fs_
+    + load_soundfont(Soundfont font)
+    + void noteon(int channel, int midi, int velocity)
+    + void noteoff(int channel, int midi, int velocity)
+}
+
+class InputProcessor {
+    - MIDI[] tap_history_
+    - void update_history_(MIDI midi)
+}
+
+package AccArranger {
+    class Arranger {
+        - ArrRule rule_
+        - ArrContext ctx_
+        + int arrange(ArrContext ctx)
+    }
+
+    class ArrContext {
+        + dict context
+        + Anything get(string key)
+    }
+
+
+    abstract class ArrRule {
+        + int predict_midi()
+    }
+}
+
+Score *--MelodySegment
+MelodySegment *-- Harmony
+Arranger *-- ArrRule
+Arranger *-- ArrContext
+
+
+
+@enduml
