@@ -8,7 +8,7 @@ import logging
 import os
 import time
 
-from taparr.arranger import NearestArranger
+from taparr.arranger import NearestArranger, ProbabilisticArranger
 from taparr.score import ExampleScore
 from taparr.synthesizer.fluidx import check_fluidsynth_library, Fluidx
 from taparr.tap_arranger import TapArranger
@@ -26,8 +26,8 @@ def start_interactive_session(sf_path):
     in_port, out_port = choose_midi_input()
 
     taparr = TapArranger(in_port, out_port, melody_range=[77, 79], loop=True)
-    score = ExampleScore.star_m545
-    taparr.load_score(score, NearestArranger())
+    score = ExampleScore.some_where_over_the_rainbow
+    taparr.load_score(score, ProbabilisticArranger())
     taparr.start_realtime_capture()
 
     input("\nPress [Enter] to stop\n")

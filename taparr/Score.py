@@ -37,6 +37,9 @@ class Harmony:
         # Convert Harte notation to a list of pitch classes covering the harmony
         return self.harte.pitchClasses
 
+    def npitch(self):
+        return len(self.harte.pitchClasses)
+
     def nearest_midi(self, midi_pitch):
         """
         Return the nearest chord tone given input MIDI pitch
@@ -50,6 +53,37 @@ class Harmony:
                             key=lambda n: min(abs((n % 12) - target_class), 12 - abs((n % 12) - target_class)))
         candidate = nearest_class + midi_pitch // 12 * 12
         options = [candidate - 12, candidate, candidate + 12]
+        return min(options, key=lambda x: abs(x - midi_pitch))
+
+    def nearest_root(self, midi_pitch):
+        # Loop through all chord pitch classes and find the minimal distance
+        root_class = self.harte.pitchClasses[0]  # chord root pitch class (0-11)
+
+        # Find the nearest octave of the root to the given midi_pitch
+        candidate = root_class + (midi_pitch // 12) * 12
+        options = [candidate - 12, candidate, candidate + 12]
+
+        # Return the one closest to the midi_pitch
+        return min(options, key=lambda x: abs(x - midi_pitch))
+
+    def nearest_nth(self, midi_pitch, nth=0):
+        """
+        When nth=0, it trivially becomes nearest root function
+        :param midi_pitch:
+        :param nth:
+        :return:
+        """
+        if nth >= len(self.harte.pitchClasses):
+            nth = len(self.harte.pitchClasses) - 1
+        assert nth >= 0
+        # Loop through all chord pitch classes and find the minimal distance
+        root_class = self.harte.pitchClasses[nth]  # chord root pitch class (0-11)
+
+        # Find the nearest octave of the root to the given midi_pitch
+        candidate = root_class + (midi_pitch // 12) * 12
+        options = [candidate - 12, candidate, candidate + 12]
+
+        # Return the one closest to the midi_pitch
         return min(options, key=lambda x: abs(x - midi_pitch))
 
 
@@ -160,7 +194,7 @@ class ExampleScore:
 
 
 def check_chord():
-    symbol = Harmony(hart_str='C:7(#9,b13)')
+    symbol = Harmony(hart_str='B:7(#9,b13)')
 
     m = symbol.nearest_midi(69)
     print(symbol.harte.prettify())
